@@ -1,0 +1,7 @@
+#dialogBox > * {
+	padding: 5px;
+}
+
+#dialogBox > input {
+	vertical-align: bottom;
+}
