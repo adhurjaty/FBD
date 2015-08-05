@@ -8,7 +8,10 @@ var fbdBorderColor = 'steelblue';
 var fbdBorder = 1;
 
 var toolList2 = ['red', 'blue', 'green', 'orange', 'black'];
-var toolList = [['force', arrow], 'moment', 'roller_joint', 'pin_joint', 'cantilever_joint'];
+var imgList = ['img/force_img.png', 'img/moment_img.png', 'img/roller_img.png',
+               'img/pin_img.png', 'img/cantilever_img.png'];
+var toolList = [['force', arrow], ['moment', moment], ['roller', rollerJoint],
+                ['pin', pinJoint], ['cantilever', cantileverJoint]];
 var toolSize = 50;
 var toolSpacing = 5;
 var toolX = width - toolSpacing - toolSize;
@@ -26,6 +29,8 @@ var dialogWidth = 250;
 var dialogBorder = 1;
 var dialogBorderColor = 'black';
 
+var pinJointWidth = 20;
+
 var imageHeight = 100;
 var imageWidth = dialogWidth - 10;
 var placeholderImage = 'https://placehold.it/' + imageWidth + 'x' + imageHeight;
@@ -39,6 +44,7 @@ var assets = []
 var inputSpacing = 5;
 
 var viewModel = {
+    orient: ko.observable(true),
     posInputs: ko.observableArray([ko.observable({label: 'X: ', value: ''}),
                                 ko.observable({label: 'Y: ', value: ''}),
                                 ko.observable({label: 'Z: ', value: ''})]),
@@ -116,14 +122,17 @@ function placeBtn() {
     var posX = parseFloat(viewModel.posInputs()[0]().value);
     var posY = parseFloat(viewModel.posInputs()[1]().value);
 
+    if(isNaN(posX) || isNaN(posY) || (viewModel.orient() && (isNaN(vecX) || isNaN(vecY)))) {
+        console.log('Show Error');
+        return;
+    }
+
     resizeFbd(posX, posY);
 
-    if(!(isNaN(vecX) || isNaN(vecY))){
-        var tempObj = {}
-        tempObj[tool()[0]] = tool()[1](posX, posY, vecX, vecY);
-        assets.push(tempObj);
-        assets.push({'label': placeLabel(posX, posY)})
-    }
+    var tempObj = {}
+    tempObj[tool()[0]] = tool()[1](posX, posY, vecX, vecY);
+    assets.push(tempObj);
+    //assets.push({'label': placeLabel(posX, posY)})
 
     hideDialog();
 }
@@ -152,6 +161,13 @@ function tool(index) {
             throw 'Tool Index Out of Bounds';
         }
         toolIndex = index;
+
+        if(toolInputs[index].orient.cartesian == null) {
+            viewModel.orient(false);
+        } else {
+            viewModel.orient(true);
+        }
+
         return toolList[index];
     } else {
         return toolList[toolIndex];
@@ -232,6 +248,16 @@ var origin = svg.append('circle')
 
 //create the tool selectors
 for(var i=0; i < toolList.length; i++) {
+    svg.append('image')
+       .attr('xlink:href', imgList[i])
+       .attr('x', toolX)
+       .attr('y', i*toolSize + (i+1)*toolSpacing)
+       .attr('height', toolSize)
+       .attr('width', toolSize)
+       .on('click', toolCallback(i))
+}
+/*
+for(var i=0; i < toolList.length; i++) {
     svg.append('rect')
        .attr('x', toolX)
        .attr('y', i*toolSize + (i+1)*toolSpacing)
@@ -240,6 +266,7 @@ for(var i=0; i < toolList.length; i++) {
        .style('fill', toolList2[i])
        .on('click', toolCallback(i));
 }
+*/
 
 //create the tool dialog rectangle and hide it. It only is visible when a tool is placed
 var toolDialog = svg.append('rect')
@@ -326,11 +353,37 @@ function moveLabel(label, newPos) {
 }
 
 
-function pin_joint(pos) {
-    width = 10;
-    var poly = svg.append('polygon')
-                  .attr('points', pos[0]+','+pos[1]+' '+(pos[0]+width/2)+','+(pos[1]+width/2)+' '+(pos[0]-width/2)+','+(pos[1]+width/2))
+function moment() {
+
+}
+
+
+function pinJoint(posX, posY) {
+    pos = fbdToSvgCoords(posX, posY);
+    return svg.append('polygon')
+                  .attr('points', pos[0] + ',' + pos[1] + ' ' + (pos[0]+pinJointWidth/2) +
+                        ',' + (pos[1]+pinJointWidth) + ' ' + (pos[0]-pinJointWidth/2) +
+                        ',' + (pos[1]+pinJointWidth))
+                  .attr('absPosX', posX)
+                  .attr('absPosY', posY)
                   .style('fill', 'black');
+}
+
+
+function movePinJoint(joint, newPos) {
+    joint.attr('points', newPos[0] + ',' + newPos[1] + ' ' + (newPos[0]+pinJointWidth/2) +
+                        ',' + (newPos[1]+pinJointWidth) + ' ' + (newPos[0]-pinJointWidth/2) +
+                        ',' + (newPos[1]+pinJointWidth));
+}
+
+
+function rollerJoint(posX, posY, xVec, yVec) {
+
+}
+
+
+function cantileverJoint(posX, posY) {
+
 }
 
 var originLabel = placeLabel(0,0);
