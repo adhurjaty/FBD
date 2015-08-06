@@ -22,7 +22,12 @@
 					  <li role="presentation" data-bind="attr: {class: cartesian() ? '' : 'active'}"><a href="#" data-bind="click: changeCoords">Spherical</a></li>
 				</ul>
 				<img data-bind="attr: {src: imgSrc()}"/>
-				<div data-bind="attr: {class: orient() == false ? 'col-md-12' : 'col-md-6'}">
+				<div class="row" data-bind="if: moment() == true">
+					<br>
+					<label class="col-md-4" align="right">Magnitude: </label>
+					<input class="col-md-6 col-md-offset-1" data-bind="value: orientInputs()[0]().value">
+				</div>
+				<div data-bind="if: moment() == false, attr: {class: orient() == false ? 'col-md-12' : 'col-md-6'}">
 					<h4 align="center">Position:</h4>
 					<div data-bind="foreach: posInputs">
 						<div class="row">

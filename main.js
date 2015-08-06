@@ -7,7 +7,6 @@ var fbdWidth = 400;
 var fbdBorderColor = 'steelblue';
 var fbdBorder = 1;
 
-var toolList2 = ['red', 'blue', 'green', 'orange', 'black'];
 var imgList = ['img/force_img.png', 'img/moment_img.png', 'img/roller_img.png',
                'img/pin_img.png', 'img/cantilever_img.png'];
 var toolList = [['force', arrow], ['moment', moment], ['roller', rollerJoint],
@@ -18,14 +17,18 @@ var toolX = width - toolSpacing - toolSize;
 var toolIndex = 0;
 var toolInputs = [
                   {orient: {cartesian: ['Fx: ', 'Fy: ', 'Fz: '], spherical: ['Mag: ', '&theta;: ', '&phi;: ']}},
-                  {orient: {cartesian: ['Fx: ', 'Fy: ', 'Fz: '], spherical: ['Mag: ', '&theta;: ', '&phi;: ']}},
+                  {orient: {cartesian: null, spherical: null}},
                   {orient: {cartesian: ['Fx: ', 'Fy: ', 'Fz: '], spherical: ['&theta;: ', '&phi;: ']}},
                   {orient: {cartesian: null, spherical: null}},
                   {orient: {cartesian: null, spherical: null}},
                  ];
+var toolSelectionRect = [];
+var selectedWidth = 3;
+var unselectedWidth = .5;
+var selectedColor = 'green';
 
 var dialogHeight = 320;
-var dialogWidth = 250;
+var dialogWidth = 260;
 var dialogBorder = 1;
 var dialogBorderColor = 'black';
 
@@ -40,11 +43,16 @@ var fbdCoordsMax = {x: 1.0, y: 1.0, z: 1.0};
 // array to keep track of all things placed on fbd
 var assets = []
 
+// moment asset is special in that it never moves once placed and is only added or subtracted value
+// once another moment is placed
+var momentAsset = null;
+
 //var inputs = [$('input[name=dialogField1]'), $('input[name=dialogField2]'), $('input[name=dialogField3]')];
 var inputSpacing = 5;
 
 var viewModel = {
     orient: ko.observable(true),
+    moment: ko.observable(false),
     posInputs: ko.observableArray([ko.observable({label: 'X: ', value: ''}),
                                 ko.observable({label: 'Y: ', value: ''}),
                                 ko.observable({label: 'Z: ', value: ''})]),
@@ -78,6 +86,11 @@ function updateArray(array, field, new_vals) {
         new_val[field] = new_vals[i]
         array[i](new_val);
     }
+}
+
+
+function changeArray(array, newVals) {
+    array(newVals);
 }
 
 
@@ -160,13 +173,24 @@ function tool(index) {
         if(index >= toolList.length) {
             throw 'Tool Index Out of Bounds';
         }
+        
+        toolSelectionRect[toolIndex].style('stroke', 'black')
+                                    .style('stroke-width', unselectedWidth)
         toolIndex = index;
 
-        if(toolInputs[index].orient.cartesian == null) {
+        toolSelectionRect[toolIndex].style('stroke', selectedColor)
+                                    .style('stroke-width', selectedWidth)
+
+        if(toolInputs[index].orient.cartesian == null)
             viewModel.orient(false);
-        } else {
+        else
             viewModel.orient(true);
-        }
+        
+
+        if(index == 1)
+            viewModel.moment(true);
+        else
+            viewModel.moment(false);
 
         return toolList[index];
     } else {
@@ -181,16 +205,6 @@ function toolCallback(i) {
     }
 }
 
-function placeDot(element, index) {
-    var x = d3.mouse(this)[0];
-    var y = d3.mouse(this)[1];
-
-    svg.append('circle')
-       .attr('cx', x)
-       .attr('cy', y)
-       .attr('r', 5)
-       .attr('fill', toolList[toolIndex]);
-}
 
 function popDialog(el, index) {
     var x = d3.mouse(this)[0] - 40;
@@ -205,7 +219,14 @@ function popDialog(el, index) {
               .style('visibility', 'visible');
 
     // put clicked position coords in popped dialog
-    updateArray(viewModel.posInputs(), 'value', svgToFbdCoords(d3.mouse(this)[0], d3.mouse(this)[1]).concat(''));
+    updateArray(viewModel.posInputs(), 'value',
+                svgToFbdCoords(d3.mouse(this)[0].toFixed(2), d3.mouse(this)[1].toFixed(2)).concat(''));
+
+    /*
+    viewModel.orientInputs(toolInputs[toolIndex].orient.cartesian.map(function(d) {
+        return {'label': d, 'value': ''};
+    }));
+    */
 
     var absX = x + svg.node().offsetLeft;
     var absY = y + svg.node().offsetTop;
@@ -253,20 +274,18 @@ for(var i=0; i < toolList.length; i++) {
        .attr('x', toolX)
        .attr('y', i*toolSize + (i+1)*toolSpacing)
        .attr('height', toolSize)
-       .attr('width', toolSize)
-       .on('click', toolCallback(i))
+       .attr('width', toolSize);
+
+    toolSelectionRect.push(svg.append('rect')
+                              .attr('x', toolX)
+                              .attr('y', i*toolSize + (i+1)*toolSpacing)
+                              .attr('height', toolSize)
+                              .attr('width', toolSize)
+                              .style('fill', 'transparent')
+                              .style('stroke', i == 0 ? selectedColor : 'black')
+                              .style('stroke-width', i == 0 ? selectedWidth : unselectedWidth)
+                              .on('click', toolCallback(i)));
 }
-/*
-for(var i=0; i < toolList.length; i++) {
-    svg.append('rect')
-       .attr('x', toolX)
-       .attr('y', i*toolSize + (i+1)*toolSpacing)
-       .attr('height', toolSize)
-       .attr('width', toolSize)
-       .style('fill', toolList2[i])
-       .on('click', toolCallback(i));
-}
-*/
 
 //create the tool dialog rectangle and hide it. It only is visible when a tool is placed
 var toolDialog = svg.append('rect')
@@ -353,8 +372,32 @@ function moveLabel(label, newPos) {
 }
 
 
-function moment() {
+function moment(n1, n2, mag) {
+    // n1 and n2 are unused parameters there only to make the function call in 'placeBtn' work
 
+    var width = 50;
+
+    if(momentAsset == null) {
+        var pos = fbdToSvgCoords(fbdCoordsMax.x/2, fbdCoordsMax.y/2).map(function(d, i) {
+            return d - width/2;
+        });
+        momentAsset = svg.append('image')
+                         .attr('xlink:href', imgList[1])
+                         .attr('x', pos[0])
+                         .attr('y', pos[1])
+                         .attr('height', width)
+                         .attr('width', width)
+                         .attr('magnitude', mag);
+        
+    } else
+        momentAsset.attr('magnitude', mag + parseFloat(momentAsset.attr('magnitude')))
+
+    momentAsset.attr('transform', '');
+    if(parseFloat(momentAsset.attr('magnitude')) < 0) {
+        momentAsset.attr('transform', 'scale(-1,1) translate(' +
+                        (-width - 2*parseFloat(momentAsset.attr('x'))) + ',0)');
+    }
+    
 }
 
 
