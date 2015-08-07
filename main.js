@@ -155,7 +155,7 @@ function resizeFbd(x, y) {
     if(x > fbdCoordsMax.x || y > fbdCoordsMax.y) {
         fbdCoordsMax.x = Math.max(x+.1, fbdCoordsMax.x);
         fbdCoordsMax.y = Math.max(y+.1, fbdCoordsMax.y);
-        var moveFnc = {'force': moveArrow, 'label': moveLabel};
+        var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint, 'roller': moveRollerJoint};
 
         for(var a of assets) {
             var assetType = Object.keys(a)[0];
@@ -421,7 +421,26 @@ function movePinJoint(joint, newPos) {
 
 
 function rollerJoint(posX, posY, xVec, yVec) {
+    var theta = Math.atan2(yVec, xVec) * 180/Math.PI;
+    var width = 30;
 
+    var pos = fbdToSvgCoords(posX, posY);
+
+    return svg.append('image')
+              .attr('xlink:href', imgList[2])
+              .attr('x', pos[0] - width/2)
+              .attr('y', pos[1])
+              .attr('height', width)
+              .attr('width', width)
+              .attr('absPosX', posX)
+              .attr('absPosY', posY)
+              .attr('transform', 'rotate(' + (90 - theta) + ',' + pos[0] + ',' + pos[1] + ')');
+}
+
+
+function moveRollerJoint(joint, newPos) {
+    joint.attr('x', newPos[0] - parseFloat(joint.attr('width'))/2)
+         .attr('y', newPos[1]);
 }
 
 
