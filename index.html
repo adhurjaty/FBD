@@ -48,7 +48,7 @@
 			</div>
 			<div class="row">
 				<div class="col-md-8 col-md-offset-4">
-					<input type="button" value="Place" class="btn col-md-6" id="accept" onclick="placeBtn()">
+					<input type="button" value="" class="btn col-md-6" id="accept" data-bind="attr: {value: editObj() == null ? 'Place' : 'Edit'}" onclick="placeBtn()" >
 					<input type="button" value="Cancel" class="btn col-md-6" id="cancel" onclick="cancelBtn()">
 				</div>
 			</div>

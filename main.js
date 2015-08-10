@@ -11,6 +11,8 @@ var imgList = ['img/force_img.png', 'img/moment_img.png', 'img/roller_img.png',
                'img/pin_img.png', 'img/cantilever_img.png'];
 var toolList = [['force', arrow], ['moment', moment], ['roller', rollerJoint],
                 ['pin', pinJoint], ['cantilever', cantileverJoint]];
+var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint,
+                       'roller': moveRollerJoint, 'cantilever': moveCantilever};
 var toolSize = 50;
 var toolSpacing = 5;
 var toolX = width - toolSpacing - toolSize;
@@ -65,6 +67,7 @@ var viewModel = {
     dialogY: ko.observable('0px'),
     dialogVisibility: ko.observable(false),
     imgSrc: ko.observable(placeholderImage),
+    editObj: ko.observable(null),
     cartesian: ko.observable(true),
     changeCoords: function(data, event) {
         if($(event.toElement).html() == 'Spherical') {
@@ -142,10 +145,15 @@ function placeBtn() {
 
     resizeFbd(posX, posY);
 
-    var tempObj = {}
-    tempObj[tool()[0]] = tool()[1](posX, posY, vecX, vecY);
-    assets.push(tempObj);
-    //assets.push({'label': placeLabel(posX, posY)})
+    if(viewModel.editObj() == null) {
+        var tempObj = {}
+        tempObj[tool()[0]] = tool()[1](posX, posY, vecX, vecY);
+        assets.push(tempObj);
+        //assets.push({'label': placeLabel(posX, posY)})
+    } else {
+        var key = Object.keys(viewModel.editObj())[0]
+        moveFnc[key](viewModel.editObj()[key], fbdToSvgCoords(posX, posY).concat([vecX, vecY]));
+    }
 
     hideDialog();
 }
@@ -155,7 +163,6 @@ function resizeFbd(x, y) {
     if(x > fbdCoordsMax.x || y > fbdCoordsMax.y) {
         fbdCoordsMax.x = Math.max(x+.1, fbdCoordsMax.x);
         fbdCoordsMax.y = Math.max(y+.1, fbdCoordsMax.y);
-        var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint, 'roller': moveRollerJoint};
 
         for(var a of assets) {
             var assetType = Object.keys(a)[0];
@@ -181,18 +188,11 @@ function tool(index) {
         toolSelectionRect[toolIndex].style('stroke', selectedColor)
                                     .style('stroke-width', selectedWidth)
 
-        if(toolInputs[index].orient.cartesian == null)
-            viewModel.orient(false);
-        else
-            viewModel.orient(true);
-        
-
-        if(index == 1)
-            viewModel.moment(true);
-        else
-            viewModel.moment(false);
+        viewModel.orient(toolInputs[index].orient.cartesian != null);
+        viewModel.moment(index == 1);
 
         return toolList[index];
+
     } else {
         return toolList[toolIndex];
     }
@@ -207,9 +207,36 @@ function toolCallback(i) {
 
 
 function popDialog(el, index) {
-    var x = d3.mouse(this)[0] - 40;
-    var y = d3.mouse(this)[1] - 40;
 
+    viewModel.editObj(null);
+    dialogHelper(index, d3.mouse(this)[0] - 40, d3.mouse(this)[1] - 40)
+
+    // put clicked position coords in popped dialog
+    updateArray(viewModel.posInputs(), 'value',
+                svgToFbdCoords(d3.mouse(this)[0].toFixed(2), d3.mouse(this)[1].toFixed(2)).concat(''));    
+}
+
+
+function editCallback(el, index) {
+    return function() {
+        var tempObj = {}
+        tempObj[toolList[index][0]] = el;
+
+        var tempIndex = toolIndex;
+        tool(index);
+
+        viewModel.editObj(tempObj);
+        dialogHelper(index, parseFloat(el.attr('x')), parseFloat(el.attr('y')));
+        updateArray(viewModel.posInputs(), 'value', [el.attr('absPosX'), el.attr('absPosY'), ''])
+        updateArray(viewModel.orientInputs(), 'value', [el.attr('xVec'), el.attr('yVec'), ''])
+
+        tool(tempIndex);
+    }
+}
+
+
+function dialogHelper(index, x, y) {
+    
     if(y + dialogHeight > height) {
         y = height - dialogHeight;
     }
@@ -217,10 +244,6 @@ function popDialog(el, index) {
     toolDialog.attr('x', x)
               .attr('y', y)
               .style('visibility', 'visible');
-
-    // put clicked position coords in popped dialog
-    updateArray(viewModel.posInputs(), 'value',
-                svgToFbdCoords(d3.mouse(this)[0].toFixed(2), d3.mouse(this)[1].toFixed(2)).concat(''));
 
     /*
     viewModel.orientInputs(toolInputs[toolIndex].orient.cartesian.map(function(d) {
@@ -236,8 +259,7 @@ function popDialog(el, index) {
     //Knockout.js way of moving dialog box
     viewModel.dialogVisibility(true);
     viewModel.dialogX(absX + inputPosX + 'px');
-    viewModel.dialogY(absY + inputPosY + 'px')
-    
+    viewModel.dialogY(absY + inputPosY + 'px');
 }
 
 //create the svg element
@@ -402,50 +424,68 @@ function moment(n1, n2, mag) {
 
 
 function pinJoint(posX, posY) {
-    pos = fbdToSvgCoords(posX, posY);
-    return svg.append('polygon')
-                  .attr('points', pos[0] + ',' + pos[1] + ' ' + (pos[0]+pinJointWidth/2) +
-                        ',' + (pos[1]+pinJointWidth) + ' ' + (pos[0]-pinJointWidth/2) +
-                        ',' + (pos[1]+pinJointWidth))
-                  .attr('absPosX', posX)
-                  .attr('absPosY', posY)
-                  .style('fill', 'black');
+    return jointHelper(posX, posY, 0, 1, 3);
 }
 
 
 function movePinJoint(joint, newPos) {
-    joint.attr('points', newPos[0] + ',' + newPos[1] + ' ' + (newPos[0]+pinJointWidth/2) +
-                        ',' + (newPos[1]+pinJointWidth) + ' ' + (newPos[0]-pinJointWidth/2) +
-                        ',' + (newPos[1]+pinJointWidth));
+    moveHelper(joint, newPos);
 }
 
 
 function rollerJoint(posX, posY, xVec, yVec) {
+    var joint = jointHelper(posX, posY, xVec, yVec, 2);
+    joint.attr('xVec', xVec).attr('yVec', yVec);
+    return joint;
+}
+
+
+function moveRollerJoint(joint, newPos) {
+    moveHelper(joint, newPos);
+}
+
+
+function cantileverJoint(posX, posY) {
+    return jointHelper(posX, posY, 0, 1, 4);
+}
+
+
+function moveCantilever(joint, newPos) {
+    moveHelper(joint, newPos);
+}
+
+
+function jointHelper(posX, posY, xVec, yVec, index) {
     var theta = Math.atan2(yVec, xVec) * 180/Math.PI;
     var width = 30;
 
     var pos = fbdToSvgCoords(posX, posY);
 
-    return svg.append('image')
-              .attr('xlink:href', imgList[2])
+    var joint = svg.append('image')
+              .attr('xlink:href', imgList[index])
               .attr('x', pos[0] - width/2)
               .attr('y', pos[1])
               .attr('height', width)
               .attr('width', width)
               .attr('absPosX', posX)
-              .attr('absPosY', posY)
-              .attr('transform', 'rotate(' + (90 - theta) + ',' + pos[0] + ',' + pos[1] + ')');
+              .attr('absPosY', posY);
+    rotateImage(joint, pos, theta);
+    joint.on('click', editCallback(joint, index));
+    return joint;
 }
 
 
-function moveRollerJoint(joint, newPos) {
+function moveHelper(joint, newPos) {
     joint.attr('x', newPos[0] - parseFloat(joint.attr('width'))/2)
          .attr('y', newPos[1]);
+    if(newPos.length == 4) {
+        rotateImage(joint, newPos.slice(0, 2), Math.atan2(newPos[3], newPos[2]) * 180/Math.PI);
+        joint.attr('xVec', newPos[2]).attr('yVec', newPos[3]);
+    }
 }
 
-
-function cantileverJoint(posX, posY) {
-
+function rotateImage(imageEl, origin, theta) {
+    imageEl.attr('transform', 'rotate(' + (90 - theta) + ',' + origin[0] + ',' + origin[1] + ')');
 }
 
 var originLabel = placeLabel(0,0);
