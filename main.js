@@ -7,11 +7,13 @@ var fbdWidth = 400;
 var fbdBorderColor = 'steelblue';
 var fbdBorder = 1;
 
+
+
 var momentWidth = 40;
 
-var imgList = ['img/force_img.png', 'img/moment_img.png', 'img/roller_img.png',
+var imgList = ['img/force_img2.png', 'img/moment_img.png', 'img/roller_img.png',
                'img/pin_img.png', 'img/cantilever_img.png'];
-var toolList = [['force', arrow], ['moment', moment], ['roller', rollerJoint],
+var toolList = [['force', placeForce], ['moment', moment], ['roller', rollerJoint],
                 ['pin', pinJoint], ['cantilever', cantileverJoint]];
 var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint, 'moment': moveMoment,
                        'roller': moveRollerJoint, 'cantilever': moveCantilever};
@@ -20,11 +22,11 @@ var toolSpacing = 5;
 var toolX = width - toolSpacing - toolSize;
 var toolIndex = 0;
 var toolInputs = [
-                  {orient: {cartesian: ['Fx: ', 'Fy: '], spherical: ['Mag: ', '&theta;:']}},
-                  {orient: {cartesian: null, spherical: null}},
-                  {orient: {cartesian: ['Fx: ', 'Fy: '], spherical: ['&theta;: ']}},
-                  {orient: {cartesian: null, spherical: null}},
-                  {orient: {cartesian: null, spherical: null}},
+                  {orient: {cartesian: ['Fx: ', 'Fy: '], polar: ['Mag: ', '&theta;:']}},
+                  {orient: {cartesian: null, polar: null}},
+                  {orient: {cartesian: ['Fx: ', 'Fy: '], polar: ['&theta;: ']}},
+                  {orient: {cartesian: null, polar: null}},
+                  {orient: {cartesian: null, polar: null}},
                  ];
 var toolSelectionRect = [];
 var selectedWidth = 3;
@@ -61,11 +63,9 @@ var viewModel = {
     orient: ko.observable(true),
     moment: ko.observable(false),
     posInputs: ko.observableArray([ko.observable({label: 'X: ', value: ''}),
-                                ko.observable({label: 'Y: ', value: ''}),
-                                ko.observable({label: 'Z: ', value: ''})]),
+                                ko.observable({label: 'Y: ', value: ''})]),
     orientInputs: ko.observableArray([ko.observable({label: 'Fx: ', value: ''}),
-                                      ko.observable({label: 'Fy: ', value: ''}),
-                                      ko.observable({label: 'Fz: ', value: ''})]),
+                                      ko.observable({label: 'Fy: ', value: ''})]),
     dialogHeight: ko.observable(dialogHeight + 'px'),
     dialogWidth: ko.observable(dialogWidth + 'px'),
     dialogX: ko.observable('0px'),
@@ -75,13 +75,12 @@ var viewModel = {
     editObj: ko.observable(null),
     cartesian: ko.observable(true),
     changeCoords: function(data, event) {
-        if($(event.toElement).html() == 'Spherical') {
-            this.cartesian(false);
-            updateArray(this.orientInputs(), 'label', toolInputs[toolIndex].orient.spherical);
-        } else {
-            this.cartesian(true);
-            updateArray(this.orientInputs(), 'label', toolInputs[toolIndex].orient.cartesian);
-        }
+        var coords = $(event.toElement).html().toLowerCase();
+        this.cartesian(coords == 'cartesian');
+        this.orientInputs(toolInputs[toolIndex].orient[coords].map(function(d, i) {
+            return ko.observable({label: d, value: viewModel.orientInputs()[i] == null ?
+                                                '' : viewModel.orientInputs()[i]().value});
+        }));
     }
 }
 
@@ -104,6 +103,20 @@ function interpolate(from_min, from_max, to_min, to_max, x) {
     console.log('Outside of FBD bounds');
 }
 
+
+function magnitude(x, y) {
+    return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
+}
+
+
+function cartesianToPolar(x, y) {
+    return [magnitude(x, y), Math.atan2(y, x)];
+}
+
+
+function polarToCartesian(mag, theta) {
+    return [mag * Math.cos(theta), mag * Math.sin(theta)];
+}
 
 function svgToFbdCoords(x, y) {
     var rectX = parseInt(fbd.attr('x'));
@@ -138,11 +151,34 @@ function cancelBtn() {
 
 function placeBtn() {
     var vecX = parseFloat(viewModel.orientInputs()[0]().value);
-    var vecY = parseFloat(viewModel.orientInputs()[1]().value);
+    var vecY = NaN;
+    if(viewModel.orientInputs().length == 2)
+        vecY = parseFloat(viewModel.orientInputs()[1]().value);   
     var posX = parseFloat(viewModel.posInputs()[0]().value);
     var posY = parseFloat(viewModel.posInputs()[1]().value);
 
     resizeFbd(posX, posY);
+
+    if(viewModel.orient()) {
+        if(isNaN(vecX))
+            throw 'Invalid input';
+
+        if(toolList[toolIndex][0] == 'roller') {
+            vecX *= Math.PI/180.0;        //convert to radians
+            var newCoords = polarToCartesian(1, vecX);
+            vecX = newCoords[0];
+            vecY = newCoords[1];
+        }
+        if(toolList[toolIndex][0] == 'force') {
+            if(isNaN(vecY))
+                throw 'Invalid input';
+            
+            vecY *= Math.PI/180.0;        //convert to radians
+            var newCoords = polarToCartesian(vecX, vecY);
+            vecX = newCoords[0];
+            vecY = newCoords[1];
+        }
+    }
 
     if(viewModel.editObj() == null) {
         var tempObj = {}
@@ -215,8 +251,9 @@ function popDialog(el, index) {
     dialogHelper(index, d3.mouse(this)[0] - 40, d3.mouse(this)[1] - 40)
 
     // put clicked position coords in popped dialog
-    updateArray(viewModel.posInputs(), 'value',
-                svgToFbdCoords(d3.mouse(this)[0].toFixed(2), d3.mouse(this)[1].toFixed(2)).concat(''));    
+    updateArray(viewModel.posInputs(), 'value', svgToFbdCoords(d3.mouse(this)[0], d3.mouse(this)[1]).map(function(d) {
+        return d.toFixed(2);
+    }));    
 }
 
 
@@ -230,8 +267,8 @@ function editCallback(el, index) {
 
         viewModel.editObj(tempObj);
         dialogHelper(index, parseFloat(el.attr('x')), parseFloat(el.attr('y')));
-        updateArray(viewModel.posInputs(), 'value', [el.attr('absPosX'), el.attr('absPosY'), ''])
-        updateArray(viewModel.orientInputs(), 'value', [el.attr('xVec'), el.attr('yVec'), ''])
+        updateArray(viewModel.posInputs(), 'value', [el.attr('absPosX'), el.attr('absPosY')])
+        updateArray(viewModel.orientInputs(), 'value', [el.attr('xVec'), el.attr('yVec')])
     }
 }
 
@@ -339,8 +376,8 @@ var arrow_head = svg.append('marker')
                     .attr('refX', 0)
                     .attr('refY', "5")
                     .attr('markerUnits', "strokeWidth")
-                    .attr('markerWidth', 4)
-                    .attr('markerHeight', 3)
+                    .attr('markerWidth', 12)
+                    .attr('markerHeight', 9)
                     .attr('orient', "auto");
 arrow_head.append('path')
       .attr('d', "M 0 0 L 10 5 L 0 10 z");
@@ -371,6 +408,16 @@ function moveArrow(arr, newPos) {
        .attr('y1', newPos[1] + parseFloat(arr.attr('yVec')))
        .attr('x2', newPos[0])
        .attr('y2', newPos[1]);
+}
+
+
+function placeForce(posX, posY, xVec, yVec) {
+    if(![posX, posY, xVec, yVec].every(function(d) { return !isNaN(d); })) {
+        throw 'Show Error';
+    }
+    var force = jointHelper(posX, posY, xVec, yVec, 0);
+    force.attr('xVec', xVec).attr('yVec', yVec);
+    return force;
 }
 
 
@@ -439,7 +486,7 @@ function moveMoment(moment, magArray) {
 
 function pinJoint(posX, posY) {
     if(![posX, posY].every(function(d) { return !isNaN(d); })) {
-        throw 'Show Error'
+        throw 'Show Error';
     }
     return jointHelper(posX, posY, 0, 1, 3);
 }
@@ -452,7 +499,7 @@ function movePinJoint(joint, newPos) {
 
 function rollerJoint(posX, posY, xVec, yVec) {
     if(![posX, posY, xVec, yVec].every(function(d) { return !isNaN(d); })) {
-        throw 'Show Error'
+        throw 'Show Error';
     }
     var joint = jointHelper(posX, posY, xVec, yVec, 2);
     joint.attr('xVec', xVec).attr('yVec', yVec);
@@ -467,7 +514,7 @@ function moveRollerJoint(joint, newPos) {
 
 function cantileverJoint(posX, posY) {
     if(![posX, posY].every(function(d) { return !isNaN(d); })) {
-        throw 'Show Error'
+        throw 'Show Error';
     }
     return jointHelper(posX, posY, 0, 1, 4);
 }

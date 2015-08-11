@@ -17,7 +17,7 @@
 		<h4 align="center">Put forces and moments on the free body diagram</h4>
 		<div id="dialogBox" class="container-fluid" data-bind="style: {position: 'absolute', visibility: dialogVisibility() ? 'visible' : 'hidden', height: dialogHeight(), width: dialogWidth(), left: dialogX(), top: dialogY()}">
 			<div class="row">
-				<ul class="nav nav-pills">
+				<ul class="nav nav-pills" data-bind="if: orient()">
 					  <li role="presentation" data-bind="attr: {class: cartesian() ? 'active' : ''}" class="active"><a href="#" data-bind="click:  changeCoords">Cartesian</a></li>
 					  <li role="presentation" data-bind="attr: {class: cartesian() ? '' : 'active'}"><a href="#" data-bind="click: changeCoords">Polar</a></li>
 				</ul>
