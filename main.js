@@ -7,20 +7,22 @@ var fbdWidth = 400;
 var fbdBorderColor = 'steelblue';
 var fbdBorder = 1;
 
+var momentWidth = 40;
+
 var imgList = ['img/force_img.png', 'img/moment_img.png', 'img/roller_img.png',
                'img/pin_img.png', 'img/cantilever_img.png'];
 var toolList = [['force', arrow], ['moment', moment], ['roller', rollerJoint],
                 ['pin', pinJoint], ['cantilever', cantileverJoint]];
-var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint,
+var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint, 'moment': moveMoment,
                        'roller': moveRollerJoint, 'cantilever': moveCantilever};
 var toolSize = 50;
 var toolSpacing = 5;
 var toolX = width - toolSpacing - toolSize;
 var toolIndex = 0;
 var toolInputs = [
-                  {orient: {cartesian: ['Fx: ', 'Fy: ', 'Fz: '], spherical: ['Mag: ', '&theta;: ', '&phi;: ']}},
+                  {orient: {cartesian: ['Fx: ', 'Fy: '], spherical: ['Mag: ', '&theta;:']}},
                   {orient: {cartesian: null, spherical: null}},
-                  {orient: {cartesian: ['Fx: ', 'Fy: ', 'Fz: '], spherical: ['&theta;: ', '&phi;: ']}},
+                  {orient: {cartesian: ['Fx: ', 'Fy: '], spherical: ['&theta;: ']}},
                   {orient: {cartesian: null, spherical: null}},
                   {orient: {cartesian: null, spherical: null}},
                  ];
@@ -28,6 +30,9 @@ var toolSelectionRect = [];
 var selectedWidth = 3;
 var unselectedWidth = .5;
 var selectedColor = 'green';
+
+// int that is used to temporarily change the tool index and track the previous tool index for editCallback
+var tempToolIndex = -1;
 
 var dialogHeight = 320;
 var dialogWidth = 260;
@@ -92,11 +97,6 @@ function updateArray(array, field, new_vals) {
 }
 
 
-function changeArray(array, newVals) {
-    array(newVals);
-}
-
-
 function interpolate(from_min, from_max, to_min, to_max, x) {
     if((from_min <= x && x <= from_max) || (from_max <= x && x <= from_min))
         return (x - from_min) * (to_max - to_min) / (from_max - from_min) + to_min;
@@ -129,6 +129,10 @@ function hideDialog() {
 }
 
 function cancelBtn() {
+    if(tempToolIndex != -1) {
+        tool(tempToolIndex);
+        tempToolIndex = -1;
+    }
     hideDialog();
 }
 
@@ -137,11 +141,6 @@ function placeBtn() {
     var vecY = parseFloat(viewModel.orientInputs()[1]().value);
     var posX = parseFloat(viewModel.posInputs()[0]().value);
     var posY = parseFloat(viewModel.posInputs()[1]().value);
-
-    if(isNaN(posX) || isNaN(posY) || (viewModel.orient() && (isNaN(vecX) || isNaN(vecY)))) {
-        console.log('Show Error');
-        return;
-    }
 
     resizeFbd(posX, posY);
 
@@ -153,6 +152,10 @@ function placeBtn() {
     } else {
         var key = Object.keys(viewModel.editObj())[0]
         moveFnc[key](viewModel.editObj()[key], fbdToSvgCoords(posX, posY).concat([vecX, vecY]));
+
+        //set the toolIndex back to the previous value
+        tool(tempToolIndex);
+        tempToolIndex = -1;
     }
 
     hideDialog();
@@ -222,15 +225,13 @@ function editCallback(el, index) {
         var tempObj = {}
         tempObj[toolList[index][0]] = el;
 
-        var tempIndex = toolIndex;
+        tempToolIndex = toolIndex;
         tool(index);
 
         viewModel.editObj(tempObj);
         dialogHelper(index, parseFloat(el.attr('x')), parseFloat(el.attr('y')));
         updateArray(viewModel.posInputs(), 'value', [el.attr('absPosX'), el.attr('absPosY'), ''])
         updateArray(viewModel.orientInputs(), 'value', [el.attr('xVec'), el.attr('yVec'), ''])
-
-        tool(tempIndex);
     }
 }
 
@@ -345,6 +346,9 @@ arrow_head.append('path')
       .attr('d', "M 0 0 L 10 5 L 0 10 z");
 
 function arrow(posX, posY, xVec, yVec) {
+    if(![posX, posY, xVec, yVec].every(function(d) { return !isNaN(d); })) {
+        throw 'Show Error'
+    }
     pos = fbdToSvgCoords(posX, posY);
     return line = svg.append('line')
                   .attr('x1', pos[0] - xVec)
@@ -397,33 +401,46 @@ function moveLabel(label, newPos) {
 function moment(n1, n2, mag) {
     // n1 and n2 are unused parameters there only to make the function call in 'placeBtn' work
 
-    var width = 50;
-
     if(momentAsset == null) {
         var pos = fbdToSvgCoords(fbdCoordsMax.x/2, fbdCoordsMax.y/2).map(function(d, i) {
-            return d - width/2;
+            return d - momentWidth/2;
         });
         momentAsset = svg.append('image')
                          .attr('xlink:href', imgList[1])
                          .attr('x', pos[0])
                          .attr('y', pos[1])
-                         .attr('height', width)
-                         .attr('width', width)
-                         .attr('magnitude', mag);
+                         .attr('height', momentWidth)
+                         .attr('width', momentWidth)
+                         .attr('xVec', mag)
+        momentAsset.on('click', editCallback(momentAsset, 1));
         
     } else
-        momentAsset.attr('magnitude', mag + parseFloat(momentAsset.attr('magnitude')))
+        momentAsset.attr('xVec', mag + parseFloat(momentAsset.attr('xVec')))
 
     momentAsset.attr('transform', '');
-    if(parseFloat(momentAsset.attr('magnitude')) < 0) {
+    if(parseFloat(momentAsset.attr('xVec')) < 0) {
         momentAsset.attr('transform', 'scale(-1,1) translate(' +
-                        (-width - 2*parseFloat(momentAsset.attr('x'))) + ',0)');
+                        (-momentWidth - 2*parseFloat(momentAsset.attr('x'))) + ',0)');
     }
     
 }
 
+function moveMoment(moment, magArray) {
+    var mag = magArray[2];
+    moment.attr('transform', '');
+
+    moment.attr('xVec', mag);
+    if(mag < 0) {
+        moment.attr('transform', 'scale(-1,1) translate(' +
+                        (-momentWidth - 2*parseFloat(moment.attr('x'))) + ',0)');
+    }
+}
+
 
 function pinJoint(posX, posY) {
+    if(![posX, posY].every(function(d) { return !isNaN(d); })) {
+        throw 'Show Error'
+    }
     return jointHelper(posX, posY, 0, 1, 3);
 }
 
@@ -434,6 +451,9 @@ function movePinJoint(joint, newPos) {
 
 
 function rollerJoint(posX, posY, xVec, yVec) {
+    if(![posX, posY, xVec, yVec].every(function(d) { return !isNaN(d); })) {
+        throw 'Show Error'
+    }
     var joint = jointHelper(posX, posY, xVec, yVec, 2);
     joint.attr('xVec', xVec).attr('yVec', yVec);
     return joint;
@@ -446,6 +466,9 @@ function moveRollerJoint(joint, newPos) {
 
 
 function cantileverJoint(posX, posY) {
+    if(![posX, posY].every(function(d) { return !isNaN(d); })) {
+        throw 'Show Error'
+    }
     return jointHelper(posX, posY, 0, 1, 4);
 }
 
