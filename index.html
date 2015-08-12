@@ -9,6 +9,7 @@
 		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 		<script src="knockout-3.3.0.js"></script>
+		<script src="math.min.js"></script>
 		<link rel="stylesheet" href="main.css">
 	</head>
 
@@ -54,6 +55,15 @@
 			</div>
 		</div>
 		<div id="drawing" align="center"></div>
+		<div class="container-fluid">
+			<div class="row">
+				<button class="btn btn-primary center-block" onclick="calculateForces()">Calculate</button>
+			</div>
+			<br>
+			<div class="row">
+				<p class="text-center alert alert-danger col-md-8 col-md-offset-2" data-bind="visible: calculationError, html: errorMessage"></p>
+			</div>
+		</div>
 
 		<script src="svg.js"></script>
 		<script src="main.js"></script>

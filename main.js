@@ -7,15 +7,16 @@ var fbdWidth = 400;
 var fbdBorderColor = 'steelblue';
 var fbdBorder = 1;
 
-
+var inputSpacing = 5;
 
 var momentWidth = 40;
+var assetWidth = 30;
 
 var imgList = ['img/force_img2.png', 'img/moment_img.png', 'img/roller_img.png',
                'img/pin_img.png', 'img/cantilever_img.png'];
 var toolList = [['force', placeForce], ['moment', moment], ['roller', rollerJoint],
                 ['pin', pinJoint], ['cantilever', cantileverJoint]];
-var moveFnc = {'force': moveArrow, 'label': moveLabel, 'pin': movePinJoint, 'moment': moveMoment,
+var moveFnc = {'force': moveForce, 'label': moveLabel, 'pin': movePinJoint, 'moment': moveMoment,
                        'roller': moveRollerJoint, 'cantilever': moveCantilever};
 var toolSize = 50;
 var toolSpacing = 5;
@@ -56,8 +57,14 @@ var assets = []
 // once another moment is placed
 var momentAsset = null;
 
-//var inputs = [$('input[name=dialogField1]'), $('input[name=dialogField2]'), $('input[name=dialogField3]')];
-var inputSpacing = 5;
+var constraintMap = {
+                        'force': 0,
+                        'moment': 0,
+                        'roller': 1,
+                        'pin': 2,
+                        'cantilever': 3
+                    }
+
 
 var viewModel = {
     orient: ko.observable(true),
@@ -74,6 +81,8 @@ var viewModel = {
     imgSrc: ko.observable(placeholderImage),
     editObj: ko.observable(null),
     cartesian: ko.observable(true),
+    calculationError: ko.observable(false),
+    errorMessage: ko.observable(''),
     changeCoords: function(data, event) {
         var coords = $(event.toElement).html().toLowerCase();
         this.cartesian(coords == 'cartesian');
@@ -159,7 +168,7 @@ function placeBtn() {
 
     resizeFbd(posX, posY);
 
-    if(viewModel.orient()) {
+    if(!viewModel.cartesian()) {
         if(isNaN(vecX))
             throw 'Invalid input';
 
@@ -205,7 +214,8 @@ function resizeFbd(x, y) {
 
         for(var a of assets) {
             var assetType = Object.keys(a)[0];
-            var newPos = fbdToSvgCoords(a[assetType].attr('absPosX'), a[assetType].attr('absPosY'));
+            var newPos = fbdToSvgCoords(parseFloat(a[assetType].attr('absPosX')),
+                                        parseFloat(a[assetType].attr('absPosY')));
             moveFnc[assetType](a[assetType], newPos);
         }
 
@@ -421,6 +431,11 @@ function placeForce(posX, posY, xVec, yVec) {
 }
 
 
+function moveForce(force, newPos) {
+    moveHelper(force, newPos);
+}
+
+
 function placeLabel(x, y) {
     // places a coordinate label under specified location
     // x and y given in fbd coords
@@ -527,16 +542,15 @@ function moveCantilever(joint, newPos) {
 
 function jointHelper(posX, posY, xVec, yVec, index) {
     var theta = Math.atan2(yVec, xVec) * 180/Math.PI;
-    var width = 30;
 
     var pos = fbdToSvgCoords(posX, posY);
 
     var joint = svg.append('image')
               .attr('xlink:href', imgList[index])
-              .attr('x', pos[0] - width/2)
+              .attr('x', pos[0] - assetWidth/2)
               .attr('y', pos[1])
-              .attr('height', width)
-              .attr('width', width)
+              .attr('height', assetWidth)
+              .attr('width', assetWidth)
               .attr('absPosX', posX)
               .attr('absPosY', posY);
     rotateImage(joint, pos, theta);
@@ -551,6 +565,8 @@ function moveHelper(joint, newPos) {
     if(newPos.length == 4) {
         rotateImage(joint, newPos.slice(0, 2), Math.atan2(newPos[3], newPos[2]) * 180/Math.PI);
         joint.attr('xVec', newPos[2]).attr('yVec', newPos[3]);
+    } else if(joint.attr('transform') != null) {
+        joint.attr('transform', [joint.attr('transform').split(',')[0]].concat(newPos).join(',') + ')');
     }
 }
 
@@ -558,5 +574,106 @@ function rotateImage(imageEl, origin, theta) {
     imageEl.attr('transform', 'rotate(' + (90 - theta) + ',' + origin[0] + ',' + origin[1] + ')');
 }
 
+
+function calculateForces() {
+    //sum DOF constraints from joints
+    var constraints = assets.reduce(function(prev, curr) {
+        return prev + constraintMap[Object.keys(curr)[0]];
+    }, 0);
+
+    viewModel.calculationError(false);
+
+    if(constraints != 3) {
+        viewModel.calculationError(true);
+        viewModel.errorMessage(constraints < 3 ? 'Under-constrained Model' : 'Over-constrained Model')
+        return;
+    }
+    
+    var forceVec = Array.apply(null, Array(3)).map(function() { return [0]; });
+    var equationMatrix = Array.apply(null, Array(3)).map(function() {
+        return Array.apply(null, Array(3)).map(function() { return 0; });
+    });
+    var outVars = [];
+
+    for(var a of assets) {
+        var key = Object.keys(a)[0];
+
+        switch(key) {
+            case 'force':
+                forceVec[0][0] -= parseFloat(a[key].attr('xVec'));
+                forceVec[1][0] -= parseFloat(a[key].attr('yVec'));
+                forceVec[2][0] -= -parseFloat(a[key].attr('xVec')) * parseFloat(a[key].attr('absPosY')) +
+                                  parseFloat(a[key].attr('yVec')) * parseFloat(a[key].attr('absPosX'))
+                break;
+            case 'pin':
+                equationMatrix[0][outVars.length] += 1;
+                equationMatrix[1][outVars.length + 1] += 1;
+                equationMatrix[2][outVars.length] -= parseFloat(a[key].attr('absPosY'));
+                equationMatrix[2][outVars.length + 1] += parseFloat(a[key].attr('absPosX'));
+                outVars.push(key);
+                outVars.push(key);
+                break;
+            case 'roller':
+                equationMatrix[0][outVars.length] += parseFloat(a[key].attr('xVec'));
+                equationMatrix[1][outVars.length] += parseFloat(a[key].attr('yVec'));
+                equationMatrix[2][outVars.length] -= parseFloat(a[key].attr('absPosY')) * parseFloat(a[key].attr('xVec'));
+                equationMatrix[2][outVars.length] += parseFloat(a[key].attr('absPosX')) * parseFloat(a[key].attr('yVec'));
+                outVars.push(key)
+                break;
+            case 'cantilever':
+                equationMatrix = math.eye(3);
+                break;
+            default:
+                console.log(a);
+                break;
+        }
+    }
+
+    forceVec[2][0] -= momentAsset != null ? parseFloat(momentAsset.attr('xVec')) : 0;
+
+    forceVec = math.matrix(forceVec);
+    equationMatrix = math.matrix(equationMatrix);
+
+    result = math.multiply(math.inv(equationMatrix), forceVec);
+    console.log(result);
+    
+}
+
+
+function printMatrix(matrix) {
+    matrix._data.forEach(function(arr) {
+        console.log(arr);
+    });
+}
+
+function testCalc() {
+    tool(0);
+    viewModel.orientInputs()[0]().value = 20;
+    viewModel.orientInputs()[1]().value = 0;   
+    viewModel.posInputs()[0]().value = 0;
+    viewModel.posInputs()[1]().value = .75;
+    placeBtn();
+
+    viewModel.orientInputs()[0]().value = 0;
+    viewModel.orientInputs()[1]().value = -20;   
+    viewModel.posInputs()[0]().value = .9;
+    viewModel.posInputs()[1]().value = 1.0;
+    placeBtn();
+
+    tool(2);
+    viewModel.orientInputs()[0]().value = 0;
+    viewModel.orientInputs()[1]().value = 1;   
+    viewModel.posInputs()[0]().value = 1.0;
+    viewModel.posInputs()[1]().value = 0;
+    placeBtn();
+
+    tool(3);  
+    viewModel.posInputs()[0]().value = .1;
+    viewModel.posInputs()[1]().value = 0;
+    placeBtn();
+}
+
 var originLabel = placeLabel(0,0);
 var maxLabel = placeLabel(1,1);
+//calculateForces();
+//testCalc();
