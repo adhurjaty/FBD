@@ -10,6 +10,7 @@
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 		<script src="knockout-3.3.0.js"></script>
 		<script src="math.min.js"></script>
+		<script src="nhpup_1.1.js"></script>
 		<link rel="stylesheet" href="main.css">
 	</head>
 
@@ -48,16 +49,18 @@
 				</div>
 			</div>
 			<div class="row">
-				<div class="col-md-8 col-md-offset-4">
-					<input type="button" value="" class="btn col-md-6" id="accept" data-bind="attr: {value: editObj() == null ? 'Place' : 'Edit'}" onclick="placeBtn()" >
-					<input type="button" value="Cancel" class="btn col-md-6" id="cancel" onclick="cancelBtn()">
+				<div class="col-md-12">
+					<input type="button" value="Delete" class="btn col-md-4" onclick="deleteItem()" data-bind="visible: editObj() != null">
+					<input type="button" value="" class="btn col-md-4" id="accept" data-bind="attr: {value: editObj() == null ? 'Place' : 'Edit'}" onclick="placeBtn()" >
+					<input type="button" value="Cancel" class="btn col-md-4" id="cancel" onclick="cancelBtn()">
 				</div>
 			</div>
 		</div>
 		<div id="drawing" align="center"></div>
 		<div class="container-fluid">
 			<div class="row">
-				<button class="btn btn-primary center-block" onclick="calculateForces()">Calculate</button>
+				<button class="btn btn-primary col-md-1 col-md-offset-5" onclick="calculateForces()">Calculate</button>
+				<button class="btn btn-primary col-md-1" onclick="clearAssets()">Clear</button>
 			</div>
 			<br>
 			<div class="row">

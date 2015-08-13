@@ -37,6 +37,7 @@ var selectedColor = 'green';
 // int that is used to temporarily change the tool index and track the previous tool index for editCallback
 var tempToolIndex = -1;
 
+var toolDialog = null;
 var dialogHeight = 320;
 var dialogWidth = 260;
 var dialogBorder = 1;
@@ -147,7 +148,10 @@ function fbdToSvgCoords(x, y) {
 
 
 function hideDialog() {
-    toolDialog.style('visibility', 'hidden');
+    if(toolDialog != null) {
+        toolDialog.remove();
+        toolDialog = null;
+    }
     viewModel.dialogVisibility(false);
 }
 
@@ -292,9 +296,7 @@ function dialogHelper(index, x, y) {
 
     clearResultsLabels();
 
-    toolDialog.attr('x', x)
-              .attr('y', y)
-              .style('visibility', 'visible');
+    createToolDialog(x, y);
 
     /*
     viewModel.orientInputs(toolInputs[toolIndex].orient.cartesian.map(function(d) {
@@ -312,6 +314,22 @@ function dialogHelper(index, x, y) {
     viewModel.dialogX(absX + inputPosX + 'px');
     viewModel.dialogY(absY + inputPosY + 'px');
 }
+
+function createToolDialog(x, y) {
+//create the tool dialog rectangle and hide it. It only is visible when a tool is placed
+    if(toolDialog != null)
+        hideDialog();
+    
+    toolDialog = svg.append('rect')
+                    .attr('x', x)
+                    .attr('y', y)
+                    .attr('height', dialogHeight)
+                    .attr('width', dialogWidth)
+                    .style('stroke', dialogBorderColor)
+                    .style('stroke-width', dialogBorder)
+                    .style('fill', 'white');
+}
+
 
 //create the svg element
 var svg = d3.select('#drawing')
@@ -357,19 +375,20 @@ for(var i=0; i < toolList.length; i++) {
                               .style('fill', 'transparent')
                               .style('stroke', i == 0 ? selectedColor : 'black')
                               .style('stroke-width', i == 0 ? selectedWidth : unselectedWidth)
-                              .on('click', toolCallback(i)));
+                              .on('click', toolCallback(i))
+                              .on('mouseover', (function(index) {
+                                    return function() {
+                                        var name = toolList[index][0];
+                                        var name = name.charAt(0).toUpperCase() + name.slice(1);
+                                        if(index > 1) {
+                                            name += ' Joint';
+                                        }
+                                        return nhpup.popup(name);
+                                        //return 'nhpup.popup("' + name + '")';
+                                  }
+                              })(i)));
 }
 
-//create the tool dialog rectangle and hide it. It only is visible when a tool is placed
-var toolDialog = svg.append('rect')
-                    .attr('x', 0)
-                    .attr('y', 0)
-                    .attr('height', dialogHeight)
-                    .attr('width', dialogWidth)
-                    .style('stroke', dialogBorderColor)
-                    .style('stroke-width', dialogBorder)
-                    .style('fill', 'white')
-                    .style('visibility', 'hidden');
 
 //create the svg border
 var borderPath = svg.append('rect')
@@ -380,48 +399,6 @@ var borderPath = svg.append('rect')
                     .style('stroke', 'black')
                     .style('fill', 'none')
                     .style('stroke-width', border);
-
-//create the arrow head for the force arrows
-var arrow_head = svg.append('marker')
-                    .attr('xmlns', "http://www.w3.org/2000/svg")
-                    .attr('id', "triangle")
-                    .attr('viewBox', "0 0 10 10")
-                    .attr('refX', 0)
-                    .attr('refY', "5")
-                    .attr('markerUnits', "strokeWidth")
-                    .attr('markerWidth', 12)
-                    .attr('markerHeight', 9)
-                    .attr('orient', "auto");
-arrow_head.append('path')
-      .attr('d', "M 0 0 L 10 5 L 0 10 z");
-
-function arrow(posX, posY, xVec, yVec) {
-    if(![posX, posY, xVec, yVec].every(function(d) { return !isNaN(d); })) {
-        throw 'Show Error'
-    }
-    pos = fbdToSvgCoords(posX, posY);
-    return line = svg.append('line')
-                  .attr('x1', pos[0] - xVec)
-                  .attr('y1', pos[1] + yVec)
-                  .attr('x2', pos[0])
-                  .attr('y2', pos[1])
-                  .attr('xVec', xVec)
-                  .attr('yVec', yVec)
-                  .attr('absPosX', posX)
-                  .attr('absPosY', posY)
-                  .attr('marker-end', 'url(#triangle)')
-                  .attr('stroke', 'black')
-                  .attr('stroke-width', 2);
-}
-
-
-function moveArrow(arr, newPos) {
-    // void function - moves arrow (arr) to specified location in svg coordinates
-    arr.attr('x1', newPos[0] - parseFloat(arr.attr('xVec')))
-       .attr('y1', newPos[1] + parseFloat(arr.attr('yVec')))
-       .attr('x2', newPos[0])
-       .attr('y2', newPos[1]);
-}
 
 
 function placeForce(posX, posY, xVec, yVec) {
@@ -470,6 +447,12 @@ function placeResultLabel(x, y, text) {
 }
 
 
+function moveLabel(label, newPos) {
+    label.attr('x', newPos[0])
+         .attr('y', newPos[1]);
+}
+
+
 function clearResultsLabels() {
     if(resultsLabels.length == 0) {
         return;
@@ -479,11 +462,6 @@ function clearResultsLabels() {
         a[Object.keys(a)[0]].remove();
     });
     resultsLabels = [];
-}
-
-function moveLabel(label, newPos) {
-    label.attr('x', newPos[0])
-         .attr('y', newPos[1]);
 }
 
 
@@ -678,6 +656,40 @@ function calculateForces() {
         var y = parseInt(d.attr('y')) + assetWidth + 15;
         placeResultLabel(x, y, '(' + d.attr('result').slice(0, -2) + ')');
     });
+}
+
+
+function deleteItem() {
+    var key = Object.keys(viewModel.editObj())[0];
+
+    //remove object from assets list
+    for(var i=0; i<assets.length; i++) {
+        if(assets[i][key] == viewModel.editObj()[key]) {
+            assets = assets.slice(0, i).concat(assets.slice(i+1));
+            break;
+        }
+    }
+
+    viewModel.editObj()[key].remove();
+    hideDialog();
+    tool(tempToolIndex);
+    tempToolIndex = -1;
+}
+
+
+function clearAssets() {
+    for(var a of assets) {
+        var key = Object.keys(a)[0];
+        a[key].remove();
+    }
+
+    assets = [];
+
+    if(momentAsset != null) {
+        momentAsset.remove();
+        momentAsset = null;
+    }
+
 }
 
 
