@@ -42,8 +42,6 @@ var dialogWidth = 260;
 var dialogBorder = 1;
 var dialogBorderColor = 'black';
 
-var pinJointWidth = 20;
-
 var imageHeight = 100;
 var imageWidth = dialogWidth - 10;
 var placeholderImage = 'https://placehold.it/' + imageWidth + 'x' + imageHeight;
@@ -53,6 +51,8 @@ var fbdCoordsMax = {x: 1.0, y: 1.0, z: 1.0};
 // array to keep track of all things placed on fbd
 var assets = []
 
+var resultsLabels = [];
+
 // moment asset is special in that it never moves once placed and is only added or subtracted value
 // once another moment is placed
 var momentAsset = null;
@@ -60,6 +60,7 @@ var momentAsset = null;
 var constraintMap = {
                         'force': 0,
                         'moment': 0,
+                        'label': 0,
                         'roller': 1,
                         'pin': 2,
                         'cantilever': 3
@@ -289,6 +290,8 @@ function dialogHelper(index, x, y) {
         y = height - dialogHeight;
     }
 
+    clearResultsLabels();
+
     toolDialog.attr('x', x)
               .attr('y', y)
               .style('visibility', 'visible');
@@ -439,7 +442,7 @@ function moveForce(force, newPos) {
 function placeLabel(x, y) {
     // places a coordinate label under specified location
     // x and y given in fbd coords
-    var text = '(' + x + ', ' + y + ')';
+    var text =  '(' + x + ', ' + y + ')';
     var coords = fbdToSvgCoords(x, y);
     //offset of label is above point if in top half of fbd
     var offset = y < fbdCoordsMax.y/2 ? 20 : -10;
@@ -453,6 +456,30 @@ function placeLabel(x, y) {
               .attr('text-anchor', 'middle');
 }
 
+
+function placeResultLabel(x, y, text) {
+
+    var label = svg.append('text')
+              .text(text)
+              .attr('x', x)
+              .attr('y', y)
+              .attr('text-anchor', 'middle');
+
+    resultsLabels.push({'label': label})
+    return label;
+}
+
+
+function clearResultsLabels() {
+    if(resultsLabels.length == 0) {
+        return;
+    }
+
+    resultsLabels.forEach(function(a, i) {
+        a[Object.keys(a)[0]].remove();
+    });
+    resultsLabels = [];
+}
 
 function moveLabel(label, newPos) {
     label.attr('x', newPos[0])
@@ -582,6 +609,7 @@ function calculateForces() {
     }, 0);
 
     viewModel.calculationError(false);
+    clearResultsLabels();
 
     if(constraints != 3) {
         viewModel.calculationError(true);
@@ -594,9 +622,12 @@ function calculateForces() {
         return Array.apply(null, Array(3)).map(function() { return 0; });
     });
     var outVars = [];
+    var uniqueJoint = [];
 
     for(var a of assets) {
         var key = Object.keys(a)[0];
+
+        a[key].attr('result', '');
 
         switch(key) {
             case 'force':
@@ -610,18 +641,21 @@ function calculateForces() {
                 equationMatrix[1][outVars.length + 1] += 1;
                 equationMatrix[2][outVars.length] -= parseFloat(a[key].attr('absPosY'));
                 equationMatrix[2][outVars.length + 1] += parseFloat(a[key].attr('absPosX'));
-                outVars.push(key);
-                outVars.push(key);
+                ['',''].forEach(function(d) { outVars.push(a[key]); })
+                uniqueJoint.push(a[key]);
                 break;
             case 'roller':
                 equationMatrix[0][outVars.length] += parseFloat(a[key].attr('xVec'));
                 equationMatrix[1][outVars.length] += parseFloat(a[key].attr('yVec'));
                 equationMatrix[2][outVars.length] -= parseFloat(a[key].attr('absPosY')) * parseFloat(a[key].attr('xVec'));
                 equationMatrix[2][outVars.length] += parseFloat(a[key].attr('absPosX')) * parseFloat(a[key].attr('yVec'));
-                outVars.push(key)
+                outVars.push(a[key])
+                uniqueJoint.push(a[key]);
                 break;
             case 'cantilever':
                 equationMatrix = math.eye(3);
+                ['','',''].forEach(function(d) { outVars.push(a[key]); })
+                uniqueJoint.push(a[key]);
                 break;
             default:
                 console.log(a);
@@ -635,8 +669,15 @@ function calculateForces() {
     equationMatrix = math.matrix(equationMatrix);
 
     result = math.multiply(math.inv(equationMatrix), forceVec);
-    console.log(result);
+    for(var i=0; i<3; i++) {
+        outVars[i].attr('result', outVars[i].attr('result') + result._data[i][0].toFixed(2) + ', ');
+    }
     
+    uniqueJoint.forEach(function(d) {
+        var x = parseInt(d.attr('x')) + assetWidth/2;
+        var y = parseInt(d.attr('y')) + assetWidth + 15;
+        placeResultLabel(x, y, '(' + d.attr('result').slice(0, -2) + ')');
+    });
 }
 
 
@@ -676,4 +717,4 @@ function testCalc() {
 var originLabel = placeLabel(0,0);
 var maxLabel = placeLabel(1,1);
 //calculateForces();
-//testCalc();
+testCalc();
