@@ -23,7 +23,7 @@ var toolSpacing = 5;
 var toolX = width - toolSpacing - toolSize;
 var toolIndex = 0;
 var toolInputs = [
-                  {orient: {cartesian: ['Fx: ', 'Fy: '], polar: ['Mag: ', '&theta;:']}},
+                  {orient: {cartesian: ['Fx: ', 'Fy: '], polar: ['Mag: ', '&theta;: ']}},
                   {orient: {cartesian: null, polar: null}},
                   {orient: {cartesian: ['Fx: ', 'Fy: '], polar: ['&theta;: ']}},
                   {orient: {cartesian: null, polar: null}},
@@ -81,25 +81,45 @@ var viewModel = {
     dialogY: ko.observable('0px'),
     dialogVisibility: ko.observable(false),
     imgSrc: ko.observable(placeholderImage),
+    imgWidth: ko.observable(imageWidth),
+    imgHeight: ko.observable(imageHeight),
     editObj: ko.observable(null),
     cartesian: ko.observable(true),
     calculationError: ko.observable(false),
     errorMessage: ko.observable(''),
     changeCoords: function(data, event) {
-        var coords = $(event.toElement).html().toLowerCase();
-        this.cartesian(coords == 'cartesian');
-        this.orientInputs(toolInputs[toolIndex].orient[coords].map(function(d, i) {
-            return ko.observable({label: d, value: viewModel.orientInputs()[i] == null ?
-                                                '' : viewModel.orientInputs()[i]().value});
-        }));
+        changeCoordsHelper($(event.toElement).html().toLowerCase());   
     }
 }
 
 ko.applyBindings(viewModel);
 
 
+function changeCoordsHelper(coords) {
+    if(toolInputs[toolIndex].orient[coords] == null)
+        return;
+        
+    viewModel.cartesian(coords == 'cartesian');
+    viewModel.orientInputs(toolInputs[toolIndex].orient[coords].map(function(d, i) {
+        var value = viewModel.orientInputs()[i] == null ? '' : viewModel.orientInputs()[i]().value;
+        var translation = {'Mag: ': 0, '&theta;: ': 1};
+
+        if(viewModel.editObj() != null) {
+            var obj = viewModel.editObj()[Object.keys(viewModel.editObj())];
+            //converting from polar to cartesian
+            if(coords == 'cartesian')
+                value = parseFloat(obj.attr(['xVec', 'yVec'][i])).toFixed(2);
+            else
+                value = cartesianToPolarDeg(parseFloat(obj.attr('xVec')),
+                                            parseFloat(obj.attr('yVec')))[translation[d]].toFixed(2);
+        }
+        return ko.observable({label: d, value: value});
+    }));
+}
+
+
 function updateArray(array, field, new_vals) {
-    for(var i = 0; i < new_vals.length; i++){
+    for(var i = 0; i < array.length; i++){
         var new_val = array[i]();
         new_val[field] = new_vals[i]
         array[i](new_val);
@@ -122,6 +142,10 @@ function magnitude(x, y) {
 
 function cartesianToPolar(x, y) {
     return [magnitude(x, y), Math.atan2(y, x)];
+}
+
+function cartesianToPolarDeg(x, y) {
+    return [magnitude(x, y), Math.atan2(y, x) * 180 / Math.PI];
 }
 
 
@@ -245,6 +269,8 @@ function tool(index) {
         viewModel.orient(toolInputs[index].orient.cartesian != null);
         viewModel.moment(index == 1);
 
+        changeCoordsHelper(viewModel.cartesian() ? 'cartesian' : 'polar');
+
         return toolList[index];
 
     } else {
@@ -282,8 +308,23 @@ function editCallback(el, index) {
 
         viewModel.editObj(tempObj);
         dialogHelper(index, parseFloat(el.attr('x')), parseFloat(el.attr('y')));
-        updateArray(viewModel.posInputs(), 'value', [el.attr('absPosX'), el.attr('absPosY')])
-        updateArray(viewModel.orientInputs(), 'value', [el.attr('xVec'), el.attr('yVec')])
+        updateArray(viewModel.posInputs(), 'value',
+                    [el.attr('absPosX'), el.attr('absPosY')].map(function(d) { return parseFloat(d).toFixed(2); }));
+        
+        if(viewModel.cartesian()) {
+            updateArray(viewModel.orientInputs(), 'value',
+                        [el.attr('xVec'), el.attr('yVec')].map(function(d) { return parseFloat(d).toFixed(2); }));
+        } else {
+            if(index == 0) {
+                updateArray(viewModel.orientInputs(), 'value',
+                            cartesianToPolarDeg(parseFloat(el.attr('xVec')), parseFloat(el.attr('yVec')))
+                                .map(function(d) { return d.toFixed(2); }));
+            }
+            if(index == 2) {
+                updateArray(viewModel.orientInputs(), 'value',
+                            [cartesianToPolarDeg(parseFloat(el.attr('xVec')), parseFloat(el.attr('yVec')))[1].toFixed(2)]);
+            }
+        }
     }
 }
 
@@ -388,6 +429,15 @@ for(var i=0; i < toolList.length; i++) {
                                   }
                               })(i)));
 }
+
+
+//place axes image
+var axesImage = svg.append('image')
+                   .attr('xlink:href', 'img/coords.png')
+                   .attr('x', 20)
+                   .attr('y', 20)
+                   .attr('width', 40)
+                   .attr('height', 40);
 
 
 //create the svg border
@@ -689,7 +739,7 @@ function clearAssets() {
         momentAsset.remove();
         momentAsset = null;
     }
-
+    clearResultsLabels();
 }
 
 
