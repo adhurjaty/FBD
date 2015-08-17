@@ -221,7 +221,8 @@ function placeBtn() {
     if(viewModel.editObj() == null) {
         var tempObj = {}
         tempObj[tool()[0]] = tool()[1](posX, posY, vecX, vecY);
-        assets.push(tempObj);
+        if(tool()[0] != 'moment')
+            assets.push(tempObj);
         //assets.push({'label': placeLabel(posX, posY)})
     } else {
         var key = Object.keys(viewModel.editObj())[0]
@@ -691,7 +692,7 @@ function calculateForces() {
         }
     }
 
-    forceVec[2][0] -= momentAsset != null ? parseFloat(momentAsset.attr('xVec')) : 0;
+    forceVec[2][0] += momentAsset != null ? parseFloat(momentAsset.attr('xVec')) : 0;
 
     forceVec = math.matrix(forceVec);
     equationMatrix = math.matrix(equationMatrix);
@@ -712,11 +713,15 @@ function calculateForces() {
 function deleteItem() {
     var key = Object.keys(viewModel.editObj())[0];
 
-    //remove object from assets list
-    for(var i=0; i<assets.length; i++) {
-        if(assets[i][key] == viewModel.editObj()[key]) {
-            assets = assets.slice(0, i).concat(assets.slice(i+1));
-            break;
+    if(key == 'moment') {
+        momentAsset = null;
+    } else {
+        //remove object from assets list
+        for(var i=0; i<assets.length; i++) {
+            if(assets[i][key] == viewModel.editObj()[key]) {
+                assets = assets.slice(0, i).concat(assets.slice(i+1));
+                break;
+            }
         }
     }
 
