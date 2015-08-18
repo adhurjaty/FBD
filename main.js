@@ -100,6 +100,7 @@ function changeCoordsHelper(coords) {
         return;
         
     viewModel.cartesian(coords == 'cartesian');
+    viewModel.imgSrc(instructionImage(toolIndex));
     viewModel.orientInputs(toolInputs[toolIndex].orient[coords].map(function(d, i) {
         var value = viewModel.orientInputs()[i] == null ? '' : viewModel.orientInputs()[i]().value;
         var translation = {'Mag: ': 0, '&theta;: ': 1};
@@ -272,6 +273,8 @@ function tool(index) {
 
         changeCoordsHelper(viewModel.cartesian() ? 'cartesian' : 'polar');
 
+        viewModel.imgSrc(instructionImage(index));
+
         return toolList[index];
 
     } else {
@@ -284,6 +287,15 @@ function toolCallback(i) {
     return function() {
         tool(i);
     }
+}
+
+
+function instructionImage(i) {
+    return [{true: 'img/cartesian_force.png', false: 'img/polar_force.png'},
+            {true: 'img/moment_instruction.png', false: 'img/moment_instruction.png'},
+            {true: 'img/cartesian_roller.png', false: 'img/polar_roller.png'},
+            {true: 'img/pin_instruction.png', false: 'img/pin_instruction.png'},
+            {true: 'img/cantilever_instruction.png', false: 'img/cantilever_instruction.png'}][i][viewModel.cartesian()]
 }
 
 
@@ -536,7 +548,7 @@ function moment(n1, n2, mag) {
         momentAsset.attr('xVec', mag + parseFloat(momentAsset.attr('xVec')))
 
     momentAsset.attr('transform', '');
-    if(parseFloat(momentAsset.attr('xVec')) < 0) {
+    if(parseFloat(momentAsset.attr('xVec')) > 0) {
         momentAsset.attr('transform', 'scale(-1,1) translate(' +
                         (-momentWidth - 2*parseFloat(momentAsset.attr('x'))) + ',0)');
     }
@@ -682,7 +694,12 @@ function calculateForces() {
                 uniqueJoint.push(a[key]);
                 break;
             case 'cantilever':
-                equationMatrix = math.eye(3);
+                //equationMatrix = math.eye(3);
+                equationMatrix[0][0] = 1;
+                equationMatrix[1][1] = 1;
+                equationMatrix[2][0] = -parseFloat(a[key].attr('absPosY'));
+                equationMatrix[2][1] = parseFloat(a[key].attr('absPosX'));
+                equationMatrix[2][2] = 1;
                 ['','',''].forEach(function(d) { outVars.push(a[key]); })
                 uniqueJoint.push(a[key]);
                 break;
@@ -692,10 +709,16 @@ function calculateForces() {
         }
     }
 
-    forceVec[2][0] += momentAsset != null ? parseFloat(momentAsset.attr('xVec')) : 0;
+    forceVec[2][0] -= momentAsset != null ? parseFloat(momentAsset.attr('xVec')) : 0;
 
     forceVec = math.matrix(forceVec);
     equationMatrix = math.matrix(equationMatrix);
+
+    if(math.det(equationMatrix) == 0) {
+        viewModel.calculationError(true);
+        viewModel.errorMessage('Redundant or sigularly constrained model')
+        return;
+    }
 
     result = math.multiply(math.inv(equationMatrix), forceVec);
     for(var i=0; i<3; i++) {

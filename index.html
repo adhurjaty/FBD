@@ -23,6 +23,7 @@
 					  <li role="presentation" data-bind="attr: {class: cartesian() ? 'active' : ''}" class="active"><a href="#" data-bind="click:  changeCoords">Cartesian</a></li>
 					  <li role="presentation" data-bind="attr: {class: cartesian() ? '' : 'active'}"><a href="#" data-bind="click: changeCoords">Polar</a></li>
 				</ul>
+				<br>
 				<img data-bind="attr: {src: imgSrc(), height: imgHeight, width: imgWidth}"/>
 				<div class="row" data-bind="if: moment() == true">
 					<br>
@@ -71,7 +72,66 @@
 		<br>
 		<div class="container-fluid">
 			<div class="row">
-				<h2>How it works:</h2>
+				<div class="col-md-10 col-md-offset-1">
+					<h4><strong>How it works:</strong></h4>
+					<p>
+						Click on the tools in the top right corner of the workspace and click within the free body diagram (FBD) to place it.
+						A dialog box will pop up and you can enter the precise location of the tool. Locations are defined in Cartesian coordinates with the bottom left corner of the FBD as the origin. Coordinates must be entered as positive numbers. The initial FBD is 1x1 unit square, but if you set the X and/or Y coordinates outside of 1x1 unit, then the FBD resizes to accomodate the new parameters. Click on items to edit or delete them.
+					</p>
+					<p>
+						The 'Clear' button clears all items from the FBD. The 'Calculate' button solves the statics problem and shows the magnitudes of reaction forces below each joint. The roller joint shows only one value upon calculation. This value is the reaction force in the direction specified on its creation. The pin joint shows 2 values: (Fx, Fy) and the cantilever joint shows 3 (Fx, Fy, Moment).
+					</p>
+					<br>
+					<h4><strong>Forces, Moments and Joints:</strong></h4>
+					<div class="row">
+						<img src="img/force_img2.png" class="img-thumbnail col-md-1" alt="Force" width="40" height="40">
+						<div class="col-md-11">
+							<strong>Force:</strong> Apply force to the FBD at the location and in the direction specified. You can specify the force as X and Y components of it or, if you hit the 'Polar' tab, as Magnitude and angle of the force. See image in the popup menu for the force for more details.
+						</div>
+					</div>
+					<br>
+					<div class="row">
+						<img src="img/moment_img.png" class="img-thumbnail col-md-1" alt="Force" width="40" height="40">
+						<div class="col-md-11">
+							<strong>Moment:</strong> Apply moment to the FBD. Magnitude of the moment is the only parameter. Adding multiple moments to the FBD only results in one moment being shown with the magnitude of the sums of the moments you have entered. Click on the moment icon in the middle of the FBD to find its magnitude.
+						</div>
+					</div>
+					<br>
+					<div class="row">
+						<img src="img/roller_img.png" class="img-thumbnail col-md-1" alt="Force" width="40" height="40">
+						<div class="col-md-11">
+							<strong>Roller Joint:</strong> The roller joint only provides a reaction force in the direction that the user specifies when it is created (in the direction of the point of the triangle). The user can specify the direction of reaction force similar to the 'Force' item (Cartesian or Polar). However, the magnitude of the Cartesian direction does not matter i.e. (Fx = 1, Fy = 1) is the same as (Fx = 5, Fy = 5). If you switch to the 'Polar' tab, then only the angle need be specified. See the popup menu for the roller joint for more detail. This joint provides one constraint for the model
+						</div>
+					</div>
+					<br>
+					<div class="row">
+						<img src="img/pin_img.png" class="img-thumbnail col-md-1" alt="Force" width="40" height="40">
+						<div class="col-md-11">
+							<strong>Pin Joint:</strong> The pin joint provides reaction forces in the X and Y directions. You only need to provide position of the pin joint. The reaction forces are shown as (Fx, Fy) after the 'Calculate' button is pressed. This joint provides two constraints for the model.
+						</div>
+					</div>
+					<br>
+					<div class="row">
+						<img src="img/cantilever_img.png" class="img-thumbnail col-md-1" alt="Force" width="40" height="40">
+						<div class="col-md-11">
+							<strong>Cantilever Joint:</strong> The cantilever joint provides reaction forces in the X and Y directions as well as a reaction moment. The reaction forces are shown as (Fx, Fy, Moment) after the 'Calculate' button is pressed. This joint provides three constraints for the model.
+						</div>
+					</div>
+					<br>
+					<h4><strong>Constraints:</strong></h4>
+					<p>
+						Joints provide constraints. A constraint prevents the FBD from moving in one degree of freedom (DOF). For this 2-D model, unconstrained, there are 3 DOFs - translation in the X direction, translation in the Y direction, and rotation. A single constraint prevents one of these motions.
+					</p>
+					<p>
+						If you click the 'Calculate' button and you have 3 constraints in the model, it should provide you with reaction forces below the joints. If you get an error message that the model is <strong>under-constrained</strong>, then add constraints until you get up to 3. If the model is <strong>over-constrained</strong>, then do the opposite.
+					</p>
+					<p>
+						There is a special case. The model could be <strong>sigularly or redundantly constrained</strong>. This means that there are 3 constraints (i.e. 3 roller joints, a roller joint and a pin joint) however, one or more constraints is eliminating a DOF that has already been eliminated. This can happen if you have 3 roller joints that all point in the same direction, or a pin and roller at the same location.
+					</p>
+					<br>
+					<br>
+				</div>
+				
 			</div>
 		</div>
 
