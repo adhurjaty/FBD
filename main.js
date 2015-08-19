@@ -85,7 +85,7 @@ var viewModel = {
     imgHeight: ko.observable(imageHeight),
     editObj: ko.observable(null),
     cartesian: ko.observable(true),
-    calculationError: ko.observable(false),
+    showError: ko.observable(false),
     errorMessage: ko.observable(''),
     changeCoords: function(data, event) {
         changeCoordsHelper($(event.toElement).html().toLowerCase());   
@@ -196,11 +196,16 @@ function placeBtn() {
     var posX = parseFloat(viewModel.posInputs()[0]().value);
     var posY = parseFloat(viewModel.posInputs()[1]().value);
 
+    if(checkErrors(posX, posY, vecX, vecY)) {
+        viewModel.showError(true);
+        return;
+    }
+    
     resizeFbd(posX, posY);
 
     if(!viewModel.cartesian()) {
-        if(isNaN(vecX))
-            throw 'Invalid input';
+        //if(isNaN(vecX))
+        //    throw 'Invalid input';
 
         if(toolList[toolIndex][0] == 'roller') {
             vecX *= Math.PI/180.0;        //convert to radians
@@ -209,8 +214,8 @@ function placeBtn() {
             vecY = newCoords[1];
         }
         if(toolList[toolIndex][0] == 'force') {
-            if(isNaN(vecY))
-                throw 'Invalid input';
+            //if(isNaN(vecY))
+            //    throw 'Invalid input';
             
             vecY *= Math.PI/180.0;        //convert to radians
             var newCoords = polarToCartesian(vecX, vecY);
@@ -235,6 +240,37 @@ function placeBtn() {
     }
 
     hideDialog();
+}
+
+
+function checkErrors(posX, posY, vecX, vecY) {
+    if(toolIndex == 1){
+        if(isNaN(vecX)) {
+            viewModel.errorMessage('Invalid magnitude value');
+            return true;
+        }
+    }
+    else if(isNaN(posX) || isNaN(posY) || posX < 0 || posY < 0) {
+        viewModel.errorMessage('Positions must be positive numbers');
+        return true;
+    }
+    if(toolIndex == 2 && !viewModel.cartesian()) {
+        if(isNaN(vecX)) {
+            viewModel.errorMessage('Invalid angle value');
+            return true;
+        }
+    }
+    if((toolIndex == 2 || toolIndex == 0) && (isNaN(vecX) || isNaN(vecY))) {
+        if(viewModel.cartesian()) {
+            viewModel.errorMessage('Invalid Fx/Fy values');
+            return true;
+        }
+        viewModel.errorMessage('Invalid Magnitude/angle values');
+        return true;
+    }
+    viewModel.errorMessage('');
+    viewModel.showError(false);
+    return false;
 }
 
 
@@ -649,11 +685,11 @@ function calculateForces() {
         return prev + constraintMap[Object.keys(curr)[0]];
     }, 0);
 
-    viewModel.calculationError(false);
+    viewModel.showError(false);
     clearResultsLabels();
 
     if(constraints != 3) {
-        viewModel.calculationError(true);
+        viewModel.showError(true);
         viewModel.errorMessage(constraints < 3 ? 'Under-constrained Model' : 'Over-constrained Model')
         return;
     }
@@ -715,7 +751,7 @@ function calculateForces() {
     equationMatrix = math.matrix(equationMatrix);
 
     if(math.det(equationMatrix) == 0) {
-        viewModel.calculationError(true);
+        viewModel.showError(true);
         viewModel.errorMessage('Redundant or sigularly constrained model')
         return;
     }
@@ -807,4 +843,4 @@ function testCalc() {
 var originLabel = placeLabel(0,0);
 var maxLabel = placeLabel(1,1);
 //calculateForces();
-testCalc();
+//testCalc();
